@@ -55,6 +55,7 @@
         this.autoUpdateInput = true;
         this.alwaysShowCalendars = false;
         this.ranges = {};
+        this.venueLocation = '';
 
         this.opens = 'right';
         if (this.element.hasClass('pull-right'))
@@ -277,6 +278,9 @@
 
         if (typeof options.alwaysShowCalendars === 'boolean')
             this.alwaysShowCalendars = options.alwaysShowCalendars;
+
+        if (typeof options.venueLocation === 'number')
+            this.venueLocation = options.venueLocation;
 
         // update day names order to firstDay
         if (this.locale.firstDay != 0) {
@@ -769,7 +773,7 @@
                     maxDate = maxLimit;
                 }
             }
-
+            let noMore = false;
             for (var row = 0; row < 6; row++) {
                 html += '<tr>';
 
@@ -804,8 +808,21 @@
                         classes.push('off', 'disabled');
 
                     //don't allow selection of date if a custom function decides it's invalid
-                    if (this.isInvalidDate(calendar[row][col]))
+                    if (this.isInvalidDate(calendar[row][col])){
                         classes.push('off', 'disabled');
+                        if(! this.startDate.isSame(this.oldStartDate) && calendar[row][col].isAfter(this.startDate, 'day')) {
+                            noMore = true
+                        }
+                    }
+                    if(noMore){
+                       if(calendar[row][col].isoWeekday() == 1){
+                            classes.push('newStart');
+
+                        } else {
+                            classes.push('off', 'disabled');
+                        }
+                    }
+
 
                     //highlight the currently selected start date
                     if (calendar[row][col].format('YYYY-MM-DD') == this.startDate.format('YYYY-MM-DD'))
@@ -816,8 +833,14 @@
                         classes.push('active', 'end-date');
 
                     //highlight dates in-between the selected dates
-                    if (this.endDate != null && calendar[row][col] > this.startDate && calendar[row][col] < this.endDate)
-                        classes.push('in-range');
+                      if (this.endDate != null && calendar[row][col] > this.startDate && calendar[row][col] < this.endDate) {
+
+                        if(calendar[row][col].isoWeekday() === 1 || calendar[row][col].format('YYYY-MM-DD') == this.endDate.format('YYYY-MM-DD')){
+                            classes.push('in-range');
+                        } else {
+                            classes.push('in-range', 'off', 'disabled');
+                        }
+                    }
 
                     //apply custom classes for this date
                     var isCustom = this.isCustomDate(calendar[row][col]);
@@ -834,8 +857,23 @@
                         if (classes[i] == 'disabled')
                             disabled = true;
                     }
-                    if (!disabled)
-                        cname += 'available';
+                   if (!disabled){
+
+                        if( this.startDate.isSame(this.oldStartDate)  || this.endDate != null ) {
+                            // Require start dates to be on mondays only
+                            var dow = calendar[row][col].isoWeekday();
+                            if(dow === 1){
+                                cname += ' available ';
+                            } else {
+                                cname += ' off disabled ';
+                            }
+                        } else if(calendar[row][col].isBefore(this.startDate) && calendar[row][col].isoWeekday() !== 1){
+                            cname += ' off disabled ';
+                        }  else {
+                            cname += ' available ';
+                        }
+
+                    }
 
                     html += '<td class="' + cname.replace(/^\s+|\s+$/g, '') + '" data-title="' + 'r' + row + 'c' + col + '">' + calendar[row][col].date() + '</td>';
 
@@ -1305,7 +1343,12 @@
             // * if one of the inputs above the calendars was focused, cancel that manual input
             //
 
-            if (this.endDate || date.isBefore(this.startDate, 'day')) { //picking start
+            //if it has the class it means that it's the start of a new section and you need to set the new start date
+            if($(e.target).hasClass('newStart')){
+                this.endDate = null;
+                this.setStartDate(date.clone());
+
+            } else if (this.endDate || date.isBefore(this.startDate, 'day')) { //picking start
                 if (this.timePicker) {
                     var hour = parseInt(this.container.find('.left .hourselect').val(), 10);
                     if (!this.timePicker24Hour) {
